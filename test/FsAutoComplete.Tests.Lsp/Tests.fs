@@ -238,6 +238,49 @@ let documentSymbolTest () =
     ]
   )
 
+type ResponseWrapper<'a> = 
+  {
+    Kind: string
+    Data: 'a
+  }
+
+type DocumentationDescription =
+    { XmlKey : string
+      Constructors : string list
+      Fields : string list
+      Functions : string list
+      Interfaces: string list
+      Attributes: string list
+      Types: string list
+      Signature : string
+      Comment : string
+      Footer : string }
+
+let documentionTest () =
+  let path = Path.Combine(__SOURCE_DIRECTORY__, "TestCases", "DocumentationTest")
+  serverTest path defaultConfigDto (fun (server, event) ->
+    let path = Path.Combine(path, "Effects.fsx")
+    let tdop : DidOpenTextDocumentParams = { TextDocument = loadDocument path}
+    do server.TextDocumentDidOpen tdop |> Async.RunSynchronously
+    testList "Document Tests" [
+      test "Get Document" {
+        let p : TextDocumentPositionParams  = { TextDocument = { Uri = filePathToUri path} ; Position = { Line=62 ; Character = 12 }}
+        let res = server.FSharpDocumentation p |> Async.RunSynchronously
+        match res with
+        | Result.Error e -> failtest "Request failed"
+        | Result.Ok notification ->
+
+          let resp =  Newtonsoft.Json.Linq.JToken.Parse(notification.Content).ToObject<ResponseWrapper<DocumentationDescription[][]>>().Data
+          let doc = resp |> Array.head |> Array.head
+
+          Expect.stringContains doc.Signature "State.IState" "Missing inferred constraint"
+          Expect.stringContains doc.Signature "Logger.ILogger" "Missing inferred constraint"
+          Expect.stringContains doc.Signature "DateTime.IDateTime" "Missing inferred constraint"
+        }
+    ]
+  )
+
+
 ///Tests for getting autocomplete
 let autocompleteTest () =
   let path = Path.Combine(__SOURCE_DIRECTORY__, "TestCases", "AutocompleteTest")
@@ -490,4 +533,5 @@ let tests =
     autocompleteTest
     renameTest
     gotoTest
+    documentionTest
   ]
